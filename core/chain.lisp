@@ -2,7 +2,7 @@
   (:import-from :aserve)
   (:import-from :jsown)
   (:use :bp/core/block
-        :bp/core/transaction
+   :bp/core/transaction
         :bp/core/encoding)
   (:export
    ;; Chain supplier API:
@@ -14,7 +14,11 @@
    #:get-block
    #:get-transaction
    ;; Available chain suppliers:
-   #:node-connection))
+   #:node-connection
+
+   #:chain-get-best-block-hash
+   #:get-best-block-hash
+   ))
 
 (in-package :bp/core/chain)
 
@@ -58,15 +62,16 @@ object."))
          (password (node-connection-password supplier))
          (authorization (cons user password))
          (content
-          (format nil
-                  "{                            ~
+           (format nil
+                   "{                            ~
                      \"jsonrpc\": \"1.0\",      ~
                      \"method\":  \"~a\",       ~
                      \"params\":  [~{~s~^, ~}], ~
                      \"id\":      \"bp\"        ~
                    }"
-                  method
-                  arguments)))
+                   method
+                   arguments)))
+    (format t content)
     (multiple-value-bind (response status)
         (net.aserve.client:do-http-request (node-connection-url supplier)
           :basic-authorization authorization
@@ -113,3 +118,54 @@ object."))
 
 (defun get-transaction (id &key encoded)
   (chain-get-transaction *chain-supplier* id :encoded encoded))
+
+
+;;; let's add some rpc methods of bitcoin
+
+;; getbestblockhash
+(defgeneric chain-get-best-block-hash (supplier)
+  (:method ((supplier node-connection))
+    (do-simple-rpc-call supplier "getbestblockhash"))
+  (:documentation "returns the hash of the best (tip) block
+in the longest blockchain"))
+
+(defun get-best-block-hash ()
+  (chain-get-best-block-hash *chain-supplier*))
+
+
+;; getblockchaininfo
+;; now return a jsown object
+(defgeneric chain-get-block-chain-info (supplier)
+  (:method ((supplier node-connection))
+    (do-simple-rpc-call supplier "getblockchaininfo"))
+  (:documentation "returns an object containing various state
+info regarding blockchain processing."))
+
+(defun get-block-chain-info ()
+  (chain-get-block-chain-info *chain-supplier*))
+
+
+;; getblockcount
+(defgeneric chain-get-block-count (supplier)
+  (:method ((supplier node-connection))
+    (do-simple-rpc-call supplier "getblockcount"))
+  (:documentation "returns the number of blocks in the longest
+blockchain"))
+
+(defun get-block-count ()
+  (chain-get-block-count *chain-supplier*))
+
+
+
+;; A problem: it couldn't to pass a true/false bollean to
+;; do-simple-rpc-call, because it use a format nil to produce conect
+;; which i need is a json serializer.
+;; getblockheader
+(defgeneric chain-get-block-header (supplier hash )
+  (:method ((supplier node-connection) hash )
+    (do-simple-rpc-call supplier "getblockheader" hash "true"))
+  (:documentation "if verbose is false, returns a string that
+is serialized, hex-encoded data for blockheader `hash`."))
+
+(defun get-block-header (hash )
+  (chain-get-block-header *chain-supplier* hash))
